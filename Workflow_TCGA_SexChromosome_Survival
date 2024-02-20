@@ -22,8 +22,8 @@ filepath <- "~/BIO_593_AppliedProject_CCLE/GDC_data_prep/"
 
 # Create dataframes from counts data
 ```{r}
-counts_fname <- paste(study, "TPM.tsv", sep = "-")
-meta_fname <- paste(study, "META.tsv", sep = "-")
+counts_fname <- paste("TCGA", study, "TPM.tsv", sep = "-")
+meta_fname <- paste("TCGA", study, "META.tsv", sep = "-")
 
 counts_path <- paste(filepath, counts_fname, sep = "")
 meta_path <- paste(filepath, meta_fname, sep = "")
