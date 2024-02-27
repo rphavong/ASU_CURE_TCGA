@@ -7,6 +7,7 @@ library(ggplot2)
 library(plotly)
 ```
 
+
 # Specify which TCGA study to analyze
 ```{r}
 study = "SKCM"
@@ -33,13 +34,16 @@ meta_path <- paste(filepath, meta_fname, sep = "")
 ### (Note this is using the TCGA-SKCM-META and TCGA-SKCM-TPM tsv files from the created tsv's when preparing the GDC data)
 ```{r}
 counts <- read.delim(counts_path, row.names = 1)
+# View the first few rows and first dataset, since there are 475 variables
+head(select(counts, gene_name, gene_type, X00fb6c2d.3abc.4d05.8506.e2d951543346_7b92fcd4.f9be.4b97.94a2.b2e8348aeaba))
 metadf <- read.delim(meta_path, row.names = 1)
+head(metadf)
 ```
 
 # Modify row id's in metadf to correspond to similar format in counts
 ```{r}
 meta_ids <- rownames(metadf)
-meta_ids <- gsub("[-]", ".", meta_ids)
+meta_ids <- gsub("[-]", ".", meta_ids) # Removed sections to the row ids in the metadf dataframe
 rownames(metadf) <- meta_ids
 ```
 
@@ -72,17 +76,22 @@ xchr_genes  <- c("ENSG00000229807")
 xchr_gnames <- c("XIST")
 
 ychr_counts <- counts[ychr_genes, ]
+# View first few lines of ychr_counts and the first dataset (since there are 475 variables)
+head(select(ychr_counts, gene_name, gene_type, X00fb6c2d.3abc.4d05.8506.e2d951543346_7b92fcd4.f9be.4b97.94a2.b2e8348aeaba))
+
+# View first few lines of xchr_counts and the first dataset (since there are 475 variables)
 xchr_counts <- counts[xchr_genes, ]
+head(select(xchr_counts, gene_name, gene_type, X00fb6c2d.3abc.4d05.8506.e2d951543346_7b92fcd4.f9be.4b97.94a2.b2e8348aeaba))
 ```
 
 
-## may want a version of new_counts for x and y?:
+## May want a version of new_counts for x and y?:
 ```{r}
 # This transforms and subsets the sex chromosome gene(s) of interest as the column/variable and the rows are all the cases that correspond to the counts
 ### This is for XIST
 new_counts1 <- data.frame(t(subset(xchr_counts,
                                    select = -c(gene_name, gene_type))))
-colnames(new_counts1) <- xchr_counts[, 1] # This changed the column code/Ensemble name to the gene name
+colnames(new_counts1) <- xchr_counts[, 1] # This created new dataframe that transformed/flipped the rows to columns, where the rows are now the case ids and counts and the variable is the gene name 
 
 ### This is for the Y-linked sex chromosomes genes of interest 
 new_counts2 <- data.frame(t(subset(ychr_counts,
@@ -90,7 +99,7 @@ new_counts2 <- data.frame(t(subset(ychr_counts,
 colnames(new_counts2) <- ychr_counts[, 1]
 
 ## Combine both transformed/subsetted dataframes between XIST and Y-linked genes
-new_counts <- data.frame(c(new_counts1, new_counts2)) # Note this removed the case ids
+new_counts <- data.frame(c(new_counts1, new_counts2)) # Note this removed the case ids, but combined the xchr_counts with ychr_counts 
 row.names(new_counts) <- row.names(new_counts1) # This puts back the case ids in their respective rows
 ```
 
@@ -101,14 +110,15 @@ row.names(new_counts) <- row.names(new_counts1) # This puts back the case ids in
 
 # Return list of row labels (ids):
 ```{r}
-id_list <- rownames(new_counts)
+id_list <- rownames(new_counts) # This creates variable with all the case ids from the GDC portal in relation to SKCM
+head(id_list)
 ```
 
 # Extract file and case uuid's from combo:
 ```{r}
 splt_id_list <- strsplit(id_list, "[_]")
-c_uuid <- vector(mode = "character", length = length(id_list))
-f_uuid <- vector(mode = "character", length = length(id_list))
+c_uuid <- vector(mode = "character", length = length(id_list)) # this is for case uuid
+f_uuid <- vector(mode = "character", length = length(id_list)) # this is for file uuid
 
 
 for (j in seq_len(length(id_list))) {
@@ -144,12 +154,14 @@ for (x in c_uuid) {
     rep_cases_list <- c(rep_cases_list, x)
   }
 }
+
+repeats_df # Note that I am getting 8 count sof repeated cases, I think that Susan might be only getting three repeating cases? 
 ```
 
 
 # repeats_df dataframe to tsv
 ```{r}
-repeats_fname <- paste(study, "repeat_samples_TPM_counts.tsv", sep = "_")
+repeats_fname <- paste("TCGA", study, "repeat_samples_TPM_counts.tsv", sep = "_")
 write_tsv(
   repeats_df %>% rownames_to_column(),
   repeats_fname,
@@ -172,20 +184,21 @@ write_tsv(
 sex_check <- data.frame(matrix(0, length(c_uuid), 5),
                         row.names = c_uuid)
 colnames(sex_check) <- c("status_XIST", "status_Y", "annotated_sex",
-                         "survival_status", "time_to_status")
+                         "survival_status", "time_to_status") # obtained 0's values for all variables listed
 
 dummy_df <- data.frame(matrix(0, length(id_list), 5)) # dummy dataframe to put in the counts_plus with new_counts variables
 
 counts_plus <- data.frame(c(new_counts, dummy_df))
 row.names(counts_plus) <- row.names(new_counts)
-colnames(counts_plus) <- c(colnames(new_counts), "status_XIST", "status_Y",
-                        "annotated_sex", "survival", "followed")
+colnames(counts_plus) <- c(colnames(new_counts), "status_XIST", "status_Y", "annotated_sex", "survival", "followed") 
+## Note to self: here we are already seeing 0's for "status_XIST", "status_Y", "annotated_sex", "survival", "followed" variables
 ```
 
 
 ### THE CODE BELOW HANDLES ONLY TWO SAMPLES PER CASE
 ```{r}
 # Create loop from c_uuid and assigning values to sex_check (columns: "annotated_sex", "survival_status", "time_to_status") where Alive are assigned '0' and those not Alive are assigned '1'
+
 for (i in c_uuid){
   sex_check[i, "annotated_sex"] <- metadf[i, "mf_list"]
   if (metadf[i, "status_list"] == "Alive") {
@@ -194,12 +207,8 @@ for (i in c_uuid){
   } else {
     sex_check[i, "survival_status"] <- 1
     sex_check[i, "time_to_status"] <- metadf[i, "surv_times"]
-  }} # side-note, this was missing another '}' to complete the expression 
-```
-
-# Check if there are replicates and if so, handle those first:
-```{r}
-# Check if there are replicates and if so, handle those first:
+  }
+  # Check if there are replicates and if so, handle those first:
   if (length(id_sets[[i]]) > 1) {
     iid1 <- id_sets[[i]][1]
     iid2 <- id_sets[[i]][2]
@@ -292,6 +301,7 @@ for (i in c_uuid){
       sex_check[i, "status_XIST"] <- "no"
     }
   }
+}
 ```
 
 
@@ -316,13 +326,14 @@ counts_plus[third_id, "followed"] <- metadf[tcase_id, "follow_list"]
 ```
 
 
+
 ###################################################
 ###---WRITE DATAFRAMES TO TSV FILES---###
 ###################################################
 
 # sex_check dataframe to tsv
 ```{r}
-sex_check_fname <- paste(study, "case_XIST-Y_outcomes.tsv", sep = "_")
+sex_check_fname <- paste("TCGA", study, "case_XIST-Y_outcomes.tsv", sep = "_")
 write_tsv(
   sex_check %>% rownames_to_column(),
   sex_check_fname,
@@ -338,7 +349,7 @@ write_tsv(
 
 # counts_plus dataframe to tsv
 ```{r}
-counts_plus_fname <- paste(study, "sample_XIST-Y_outcomes.tsv", sep = "_")
+counts_plus_fname <- paste("TCGA", study, "sample_XIST-Y_outcomes.tsv", sep = "_")
 
 write_tsv(
   counts_plus %>% rownames_to_column(),
@@ -373,6 +384,8 @@ df_points2 <- sex_check_m %>%
   transmute(XIST_Y = paste(sex_check_m$status_XIST, "XIST_",
                            sex_check_m$status_Y, "Y", sep = ""))
 sex_check_m <- cbind(sex_check_m, df_points2)
+## Note: transmute() from dyplr creates new columns from a data frame by transforming exiting ones 
+table(sex_check_m$XIST_Y)
 
 # Filter for females
 sex_check_f <- sex_check %>% filter(annotated_sex == "female")
@@ -380,17 +393,16 @@ df_points3 <- sex_check_f %>%
   transmute(XIST_Y = paste(sex_check_f$status_XIST, "XIST_",
                            sex_check_f$status_Y, "Y", sep = ""))
 sex_check_f <- cbind(sex_check_f, df_points3)
+table(sex_check_f$XIST_Y)
 
-# Use survfit function to do survival analysis between males and females
+# Use survfit function to do survival analysis of males and females
 km_m <- survfit(Surv(time_to_status, survival_status) ~ XIST_Y, data = sex_check_m)
 km_f <- survfit(Surv(time_to_status, survival_status) ~ XIST_Y, data = sex_check_f)
 
-# Plot
+# Survival Analysis plot males
 km_m_plot_fname <- paste("KM", study, "Male.png", sep = "_")
 png(km_m_plot_fname)
 
-
-# Plot using ggsurvplot function 
 km_m %>%
   ggsurvplot(
     data = sex_check_m,
@@ -409,11 +421,10 @@ km_m %>%
   )
 dev.off()
 
+# Survival Analysis plot females
 km_f_plot_fname <- paste("KM", study, "Female.png", sep = "_")
 png(km_f_plot_fname)
 
-
-# Plot for females
 km_f %>%
   ggsurvplot(
     data = sex_check_f,
@@ -437,7 +448,6 @@ dev.off()
 ###################################################
 ###---COUNT GROUP MEMBERSHIP FOR TABLE---###
 ###################################################
-
 
 ```{r}
 # among those annotated "male":
@@ -584,4 +594,91 @@ fig <- subplot(figDDX3Y, figUSP9Y, figUTY, figZFY, figXIST,
   )
 
 fig
+```
+
+
+
+#####################################################
+###---LINE PLOTS OF TPM COUNTS FOR THE ODD COMBOS-###
+###---OF LOW XIST & LOW Y OR HIGH XIST & HIGH Y---###
+###---TO ASSESS FOR ANY PATTERNS WITHIN SAMPLES---###
+#####################################################
+
+# Two Groups of Interest:
+```{r}
+# 1. no XIST and no Y
+nxny_counts <- counts_plus %>% filter(status_XIST == "no" & status_Y == "no")
+
+# 2. yes XIST and yes Y
+yxyy_counts <- counts_plus %>% filter(status_XIST == "yes" & status_Y == "yes")
+
+# Prepping list of gene names for plot functions below:
+# gene_names <- c("XIST", "DDX3Y", "EIF1AY", "KDM5D", "NLGN4Y", "RPS4Y1", "TMSB4Y", "USP9Y", "UTY", "ZFY") ### Placeholder, since I am still wondering why Susan cut down to 4 Y-linked genes
+
+gene_names <- c("XIST", "DDX3Y", "USP9Y", "UTY", "ZFY")
+
+# Reshape to work well with plot functions:
+nxny_plots <- reshape(nxny_counts,
+                      varying = gene_names,
+                      drop = c("EIF1AY", "KDM5D",
+                               "NLGN4Y", "TMSB4Y", "RPS4Y1",
+                               "status_XIST", "status_Y",
+                               "survival", "followed"),
+                      v.names = "TPM_counts",
+                      timevar = "gene_names",
+                      times = gene_names,
+                      ids = row.names(nxny_counts),
+                      direction = "long")
+
+yxyy_plots <- reshape(yxyy_counts,
+                      varying = gene_names,
+                      drop = c("EIF1AY", "KDM5D",
+                               "NLGN4Y", "TMSB4Y", "RPS4Y1",
+                               "status_XIST", "status_Y",
+                               "survival", "followed"),
+                      v.names = "TPM_counts",
+                      timevar = "gene_names",
+                      times = gene_names,
+                      ids = row.names(yxyy_counts),
+                      direction = "long")
+```
+
+
+# Plot the lines
+```{r}
+# Linear y-axis
+lineplot1_fname <- paste("TPM", study, "LowXIST-LowY_Color-by-Sex.png", sep = "_")
+png(lineplot1_fname)
+ggplot(data = nxny_plots, aes(x = fct_inorder(gene_names), y = TPM_counts,
+                              group = id, color = annotated_sex)) +  # color = id
+  scale_color_discrete(guide = "none") + geom_point() + geom_line() +
+  ggtitle("SKCM samples with No/Low XIST No/Low Y chr, inclusive of repeats") +
+  theme(plot.title = element_text(hjust = 0.5))
+dev.off()
+
+lineplot2_fname <- paste("TPM", study, "HighXIST-HighY_Color-by-Sex.png", sep = "_")
+png(lineplot2_fname)
+ggplot(data = yxyy_plots, aes(x = fct_inorder(gene_names), y = TPM_counts,
+                              group = id, color = annotated_sex)) +  # color = id
+  scale_color_discrete(guide = "none") + geom_point() + geom_line() +
+  ggtitle("SKCM samples with XIST & Y markers TPM>1.0, inclusive of repeats") +
+  theme(plot.title = element_text(hjust = 0.5))
+dev.off()
+
+# Log y-axis
+loglineplot1_fname <- paste("TPM", study, "LowXIST-LowY_Color-by-Sex_Log-axis.png", sep = "_")
+png(loglineplot1_fname)
+ggplot(data = nxny_plots, aes(x = fct_inorder(gene_names), y = TPM_counts,
+                              group = id, color = annotated_sex)) +
+  scale_color_discrete(guide = "none") +
+  geom_point() + geom_line() + scale_y_continuous(trans = "log10")
+dev.off()
+
+loglineplot2_fname <- paste("TPM", study, "HighXIST-HighY_Color-by-Sex_Log-axis.png", sep = "_")
+png(loglineplot2_fname)
+ggplot(data = yxyy_plots, aes(x = fct_inorder(gene_names), y = TPM_counts,
+                              group = id, color = annotated_sex)) +
+  scale_color_discrete(guide = "none") +
+  geom_point() + geom_line() + scale_y_continuous(trans = "log10")
+dev.off()
 ```
