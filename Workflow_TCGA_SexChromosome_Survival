@@ -1,5 +1,5 @@
 ---
-title: "Sex Check Analysis LUSC"
+title: "Sex Check Analysis SKCM"
 output:
   word_document: default
   html_document: default
