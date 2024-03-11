@@ -35,7 +35,7 @@ meta_path <- paste(filepath, meta_fname, sep = "")
 ```{r}
 counts <- read.delim(counts_path, row.names = 1)
 # View the first few rows and first dataset, since there are 475 variables
-head(select(counts, gene_name, gene_type, X00fb6c2d.3abc.4d05.8506.e2d951543346_7b92fcd4.f9be.4b97.94a2.b2e8348aeaba))
+head(select(counts, 1:5))
 metadf <- read.delim(meta_path, row.names = 1)
 head(metadf)
 ```
@@ -77,11 +77,11 @@ xchr_gnames <- c("XIST")
 
 ychr_counts <- counts[ychr_genes, ]
 # View first few lines of ychr_counts and the first dataset (since there are 475 variables)
-head(select(ychr_counts, gene_name, gene_type, X00fb6c2d.3abc.4d05.8506.e2d951543346_7b92fcd4.f9be.4b97.94a2.b2e8348aeaba))
+head(select(ychr_counts, 1:5))
 
 # View first few lines of xchr_counts and the first dataset (since there are 475 variables)
 xchr_counts <- counts[xchr_genes, ]
-head(select(xchr_counts, gene_name, gene_type, X00fb6c2d.3abc.4d05.8506.e2d951543346_7b92fcd4.f9be.4b97.94a2.b2e8348aeaba))
+head(select(xchr_counts, 1:5))
 ```
 
 
