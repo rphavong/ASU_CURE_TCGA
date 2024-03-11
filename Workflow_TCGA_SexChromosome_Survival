@@ -1,3 +1,12 @@
+---
+title: "Sex Check Analysis LUSC"
+output:
+  word_document: default
+  html_document: default
+date: "2024-03-11"
+always_allow_html: yes
+---
+
 # WORKFLOW for CIREN TCGA SEX chromosomes vs Survival from Susan Massey
 
 # Load required packages
