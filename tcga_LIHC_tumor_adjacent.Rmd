@@ -1,0 +1,967 @@
+---
+title: "TCGA-LIHC Tumor vs. Adjacent"
+author: "Robet Phavong"
+date: "2024-06-27"
+output:
+  word_document: default
+  html_document: default
+---
+
+
+
+## Set options for printing reports
+
+```{r Printoptions}
+
+# this will make sure that the code doesn't run off the page when printing a report
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 50), tidy = TRUE)
+```
+
+
+# Load required packages
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(plotly)
+library(TCGAbiolinks)
+library(SummarizedExperiment)
+library(maftools)
+library(dplyr)
+library(GGally)
+library(tidyr)
+library(reshape2)
+library(tibble)
+```
+
+
+# Set directories
+```{r}
+working_path <- "/Users/robertphavongurquidez/Desktop/BIO 593 Applied Project/TCGA_Tumor_Adjacent/"
+
+setwd(working_path)
+
+filepath <- "/Users/robertphavongurquidez/Desktop/BIO 593 Applied Project/TCGA_Tumor_Adjacent/"
+```
+
+
+
+```{r}
+# Get list of projects within the GDC Portal
+gdcprojects <- getGDCprojects()
+
+getProjectSummary("TCGA-LIHC")
+```
+
+
+
+# Building a query for the extraction of project of interest
+```{r}
+query_transcriptome_LIHC <- GDCquery(project = "TCGA-LIHC",
+    data.category = "Transcriptome Profiling",
+    experimental.strategy = "RNA-Seq",
+    workflow.type = "STAR - Counts",
+    access = "open")
+```
+
+
+# Extract the files that are only 'Transcriptome Profiling'
+```{r}
+output_query_TCGA_LIHC_transcriptome <- getResults(query_transcriptome_LIHC)
+
+head(query_transcriptome_LIHC)
+```
+
+
+# Build a query to retrieve gene expression data
+```{r}
+# Separate the 'Primary Tumor'
+query_TCGA_LIHC_transcriptome_primary_tumor <- GDCquery(project = "TCGA-LIHC",
+    data.category = "Transcriptome Profiling", experimental.strategy = "RNA-Seq",
+    data.type = "Gene Expression Quantification", sample.type = "Primary Tumor", workflow.type = "STAR - Counts", access = "open")
+
+# Separate the 'Recurrent Tumor'
+query_TCGA_LIHC_transcriptome_recurrent_tumor <- GDCquery(project = "TCGA-LIHC",
+    data.category = "Transcriptome Profiling", experimental.strategy = "RNA-Seq",
+    data.type = "Gene Expression Quantification", sample.type = "Recurrent Tumor", workflow.type = "STAR - Counts", access = "open")
+
+# Separate the 'Solid Tissue Normal'
+query_TCGA_LIHC_transcriptome_solid_tissue_normal <- GDCquery(project = "TCGA-LIHC",
+    data.category = "Transcriptome Profiling", experimental.strategy = "RNA-Seq",
+    data.type = "Gene Expression Quantification", sample.type = "Solid Tissue Normal", workflow.type = "STAR - Counts", access = "open")
+```
+
+
+# Download data of interest from files filtered for gene expression from Project TCGA-LIHC using GDCdownload
+```{r}
+GDCdownload(query_TCGA_LIHC_transcriptome_primary_tumor)
+
+GDCdownload(query_TCGA_LIHC_transcriptome_recurrent_tumor)
+
+GDCdownload(query_TCGA_LIHC_transcriptome_solid_tissue_normal)
+```
+
+
+# Prepare data to extract information from the data selected
+```{r}
+# Primary Tumor
+tcga_LIHC_transcriptome_primary_tumor <- GDCprepare(query_TCGA_LIHC_transcriptome_primary_tumor, summarizedExperiment = FALSE)
+
+# Recurrent Tumor
+tcga_LIHC_transcriptome_recurrent_tumor <- GDCprepare(query_TCGA_LIHC_transcriptome_recurrent_tumor, summarizedExperiment = FALSE)
+
+# Solid Normal Tissue
+tcga_LIHC_transcriptome_solid_tissue_normal <- GDCprepare(query_TCGA_LIHC_transcriptome_solid_tissue_normal, summarizedExperiment = FALSE)
+
+```
+
+
+# Extract the Genes of Interest and their TPM counts for Primary Tumor
+```{r}
+## Primary Tumor
+# Define the gene names of interest
+genes_of_interest <- c("XIST", "RPS4Y1", "ZFY", "USP9Y", "DDX3Y", "UTY", "TMSB4Y", "EIF1AY", "NLGN4Y", "KDM5D")
+
+# Filter rows to keep only the genes of interest
+filtered_genes_primary_tumor <- tcga_LIHC_transcriptome_primary_tumor %>% filter(gene_name %in% genes_of_interest)
+
+# Select columns that start with 'tpm_unstranded_' and the 'gene_name' column
+genes_tpm_primary_tumor <- filtered_genes_primary_tumor %>% select(gene_name, starts_with("tpm_unstranded_"))
+
+# Transform data, so that cases are on the 'rows' and the genes are as columns
+genes_tpm_primary_tumor <- t(genes_tpm_primary_tumor)
+
+# Set the first row as column names
+colnames(genes_tpm_primary_tumor) <- as.character(genes_tpm_primary_tumor[1,])
+
+# Remove the first row
+genes_tpm_primary_tumor <- genes_tpm_primary_tumor[-1,]
+
+# Convert the data to a data frame
+genes_tpm_primary_tumor <- as.data.frame(genes_tpm_primary_tumor)
+```
+
+
+# Extract the Genes of Interest and their TPM counts for Recurrent Tumor
+```{r}
+## Recurrent Tumor
+# Define the gene names of interest
+genes_of_interest <- c("XIST", "RPS4Y1", "ZFY", "USP9Y", "DDX3Y", "UTY", "TMSB4Y", "EIF1AY", "NLGN4Y", "KDM5D")
+
+# Filter rows to keep only the genes of interest
+filtered_genes_recurrent_tumor <- tcga_LIHC_transcriptome_recurrent_tumor %>% filter(gene_name %in% genes_of_interest)
+
+# Select columns that start with 'tpm_unstranded_' and the 'gene_name' column
+genes_tpm_recurrent_tumor <- filtered_genes_recurrent_tumor %>% select(gene_name, starts_with("tpm_unstranded_"))
+
+# Transform data, so that cases are on the 'rows' and the genes are as columns
+genes_tpm_recurrent_tumor <- t(genes_tpm_recurrent_tumor)
+
+# Set the first row as column names
+colnames(genes_tpm_recurrent_tumor) <- as.character(genes_tpm_recurrent_tumor[1,])
+
+# Remove the first row
+genes_tpm_recurrent_tumor <- genes_tpm_recurrent_tumor[-1,]
+
+# Convert the data to a data frame
+genes_tpm_recurrent_tumor <- as.data.frame(genes_tpm_recurrent_tumor)
+```
+
+
+# Extract the Genes of Interest and their TPM counts for Solid Tissue Normal
+```{r}
+## Recurrent Tumor
+# Define the gene names of interest
+genes_of_interest <- c("XIST", "RPS4Y1", "ZFY", "USP9Y", "DDX3Y", "UTY", "TMSB4Y", "EIF1AY", "NLGN4Y", "KDM5D")
+
+# Filter rows to keep only the genes of interest
+filtered_genes_solid_tissue_normal <- tcga_LIHC_transcriptome_solid_tissue_normal %>% filter(gene_name %in% genes_of_interest)
+
+# Select columns that start with 'tpm_unstranded_' and the 'gene_name' column
+genes_tpm_solid_tissue_normal <- filtered_genes_solid_tissue_normal %>% select(gene_name, starts_with("tpm_unstranded_"))
+
+# Transform data, so that cases are on the 'rows' and the genes are as columns
+genes_tpm_solid_tissue_normal <- t(genes_tpm_solid_tissue_normal)
+
+# Set the first row as column names
+colnames(genes_tpm_solid_tissue_normal) <- as.character(genes_tpm_solid_tissue_normal[1,])
+
+# Remove the first row
+genes_tpm_solid_tissue_normal <- genes_tpm_solid_tissue_normal[-1,]
+
+# Convert the data to a data frame
+genes_tpm_solid_tissue_normal <- as.data.frame(genes_tpm_solid_tissue_normal)
+```
+
+# Remove 'tpm_unstranded_' from all the cases
+```{r}
+# Remove 'tpm_unstranded_' from the row names of genes_tpm_primary_tumor
+rownames(genes_tpm_primary_tumor) <- sub("^tpm_unstranded_", "", rownames(genes_tpm_primary_tumor))
+
+# Remove 'tpm_unstranded_' from the row names of genes_tpm_recurrent_tumor
+rownames(genes_tpm_recurrent_tumor) <- sub("^tpm_unstranded_", "", rownames(genes_tpm_recurrent_tumor))
+
+# Remove 'tpm_unstranded_' from the row names of genes_tpm_solid_tissue_normal
+rownames(genes_tpm_solid_tissue_normal) <- sub("^tpm_unstranded_", "", rownames(genes_tpm_solid_tissue_normal))
+
+# Verify the changes
+head(rownames(genes_tpm_primary_tumor))
+head(rownames(genes_tpm_recurrent_tumor))
+head(rownames(genes_tpm_solid_tissue_normal))
+```
+
+
+# Combine 'cases', 'cases.sumbitter_id', and 'sample_type'
+## Note, cases.submitter_id: The unique key that was used for the case that links the demographic entity to the case. (https://docs.gdc.cancer.gov/Data_Submission_Portal/Users_Guide/Data_Submission_Walkthrough/ )
+```{r}
+# From the 'output_query_TCGA_LIHC_transcriptome'extract 'cases' and 'cases.sumbitter_id so that we can combine to the data below to correlate cases between primary, solid tissue normal, and recurrent
+cases_column <- output_query_TCGA_LIHC_transcriptome %>%
+  select(cases, cases.submitter_id, sample_type)
+
+# Print the cases_column
+head(cases_column)
+
+# Separate the cases based on 'sample_type'
+# Subset for "Primary Tumor"
+primary_tumor_cases <- cases_column[cases_column$sample_type == "Primary Tumor", ]
+
+# Subset for "Solid Tissue Normal"
+solid_tissue_normal_cases <- cases_column[cases_column$sample_type == "Solid Tissue Normal", ]
+
+# Subset for "Recurrent Tumor"
+recurrent_tumor_cases <- cases_column[cases_column$sample_type == "Recurrent Tumor", ]
+
+
+
+
+#### Add "cases.submitter_id" to gene_tpm dataframes
+## Primary Tumor
+# Convert the row names of genes_tpm_primary_tumor to a column
+genes_tpm_primary_tumor$cases <- rownames(genes_tpm_primary_tumor)
+
+# Perform the merge operation to add 'cases.submitter_id'
+genes_tpm_primary_tumor_merged <- merge(genes_tpm_primary_tumor, primary_tumor_cases[, c("cases", "cases.submitter_id")], by = "cases")
+
+# Reorder columns to make 'cases.submitter_id' the second column
+# Get the current column names
+col_names_primary_tumor <- colnames(genes_tpm_primary_tumor_merged)
+
+# Create a new order for the columns
+new_order_primary_tumor <- c(col_names_primary_tumor[1], "cases.submitter_id", col_names_primary_tumor[2:(ncol(genes_tpm_primary_tumor_merged) - 1)])
+
+# Reorder the columns
+genes_tpm_primary_tumor_merged <- genes_tpm_primary_tumor_merged[, new_order_primary_tumor]
+
+# Remove the first column
+genes_tpm_primary_tumor_merged <- genes_tpm_primary_tumor_merged[, -1]
+
+# Set 'cases.submitter_id' as row names
+rownames(genes_tpm_primary_tumor_merged) <- genes_tpm_primary_tumor_merged$cases.submitter_id
+
+# Remove the 'cases.submitter_id' column
+#genes_tpm_primary_tumor_merged$cases.submitter_id <- NULL
+
+# Print the first few rows to verify the result
+head(genes_tpm_primary_tumor_merged)
+
+
+
+#### Add "cases.submitter_id" to gene_tpm dataframes
+## Recurrent Tumor
+# Convert the row names of genes_tpm_recurrent_tumor to a column
+genes_tpm_recurrent_tumor$cases <- rownames(genes_tpm_recurrent_tumor)
+
+# Perform the merge operation to add 'cases.submitter_id'
+genes_tpm_recurrent_tumor_merged <- merge(genes_tpm_recurrent_tumor, recurrent_tumor_cases[, c("cases", "cases.submitter_id")], by = "cases")
+
+# Reorder columns to make 'cases.submitter_id' the second column
+# Get the current column names
+col_names_recurrent_tumor <- colnames(genes_tpm_recurrent_tumor_merged)
+
+# Create a new order for the columns
+new_order_recurrent_tumor <- c(col_names_recurrent_tumor[1], "cases.submitter_id", col_names_recurrent_tumor[2:(ncol(genes_tpm_recurrent_tumor_merged) - 1)])
+
+# Reorder the columns
+genes_tpm_recurrent_tumor_merged <- genes_tpm_recurrent_tumor_merged[, new_order_recurrent_tumor]
+
+# Remove the first column
+genes_tpm_recurrent_tumor_merged <- genes_tpm_recurrent_tumor_merged[, -1]
+
+#################################################
+## Issues with cases.submitter_id that repeats ##
+#################################################
+# # Set 'cases.submitter_id' as row names
+# rownames(genes_tpm_recurrent_tumor_merged) <- genes_tpm_recurrent_tumor_merged$cases.submitter_id
+# 
+# # Remove the 'cases.submitter_id' column
+# genes_tpm_recurrent_tumor_merged$cases.submitter_id <- NULL
+# 
+# # Print the first few rows to verify the result
+# head(genes_tpm_recurrent_tumor_merged)
+
+
+
+
+#### Add "cases.submitter_id" to gene_tpm dataframes
+## Solid Tissue Normal
+# Convert the row names of genes_tpm_solid_tissue_normal to a column
+genes_tpm_solid_tissue_normal$cases <- rownames(genes_tpm_solid_tissue_normal)
+
+# Perform the merge operation to add 'cases.submitter_id'
+genes_tpm_solid_tissue_normal_merged <- merge(genes_tpm_solid_tissue_normal, solid_tissue_normal_cases[, c("cases", "cases.submitter_id")], by = "cases")
+
+# Reorder columns to make 'cases.submitter_id' the second column
+# Get the current column names
+col_names_solid_tissue_normal <- colnames(genes_tpm_solid_tissue_normal_merged)
+
+# Create a new order for the columns
+new_order_solid_tissue_normal <- c(col_names_solid_tissue_normal[1], "cases.submitter_id", col_names_solid_tissue_normal[2:(ncol(genes_tpm_solid_tissue_normal_merged) - 1)])
+
+# Reorder the columns
+genes_tpm_solid_tissue_normal_merged <- genes_tpm_solid_tissue_normal_merged[, new_order_solid_tissue_normal]
+
+# Remove the first column
+genes_tpm_solid_tissue_normal_merged <- genes_tpm_solid_tissue_normal_merged[, -1]
+
+# Set 'cases.submitter_id' as row names
+rownames(genes_tpm_solid_tissue_normal_merged) <- genes_tpm_solid_tissue_normal_merged$cases.submitter_id
+
+# Remove the 'cases.submitter_id' column
+#genes_tpm_solid_tissue_normal_merged$cases.submitter_id <- NULL
+
+# Print the first few rows to verify the result
+head(genes_tpm_solid_tissue_normal_merged)
+```
+
+
+
+# Combine Solid Tissue Normal and Primary Tumor 
+```{r}
+# Find common cases (rows) across all data frames
+common_cases_solid_primary <- intersect(rownames(genes_tpm_solid_tissue_normal_merged), rownames(genes_tpm_primary_tumor_merged))
+
+# Subset the data frames to keep only the common cases, preserving row names
+genes_tpm_solid_tissue_normal_common <- genes_tpm_solid_tissue_normal_merged[common_cases_solid_primary, , drop = FALSE]
+genes_tpm_primary_tumor_common <- genes_tpm_primary_tumor_merged[common_cases_solid_primary, , drop = FALSE]
+
+# Ensure row names are unique within each subsetted data frame
+rownames(genes_tpm_solid_tissue_normal_common) <- make.unique(rownames(genes_tpm_solid_tissue_normal_common))
+rownames(genes_tpm_primary_tumor_common) <- make.unique(rownames(genes_tpm_primary_tumor_common))
+
+# Add a column to each data frame to indicate the sample type
+genes_tpm_solid_tissue_normal_common$SampleType <- "Solid Tissue Normal"
+genes_tpm_primary_tumor_common$SampleType <- "Primary Tumor"
+
+# Combine the data frames while preserving row names
+combined_common_normal_primary <- rbind(genes_tpm_solid_tissue_normal_common, genes_tpm_primary_tumor_common)
+
+# Ensure that SampleType is a factor
+combined_common_normal_primary$SampleType <- factor(combined_common_normal_primary$SampleType, levels = c("Solid Tissue Normal", "Primary Tumor"))
+```
+
+
+
+# Make data frame as a long data frame in prep for ggplot 
+```{r}
+# Separate the data frames
+solid_normal_data <- combined_common_normal_primary %>%
+  filter(SampleType == "Solid Tissue Normal") %>%
+  select(cases.submitter_id, XIST, RPS4Y1, ZFY, USP9Y, DDX3Y, UTY, TMSB4Y, EIF1AY, NLGN4Y, KDM5D)
+
+primary_tumor_data <- combined_common_normal_primary %>%
+  filter(SampleType == "Primary Tumor") %>%
+  select(cases.submitter_id, XIST, RPS4Y1, ZFY, USP9Y, DDX3Y, UTY, TMSB4Y, EIF1AY, NLGN4Y, KDM5D)
+
+# Merge the data frames on 'cases.submitter_id'
+merged_data <- merge(solid_normal_data, primary_tumor_data, by = "cases.submitter_id", suffixes = c(".Normal", ".Tumor"))
+
+# Reshape data for ggpairs
+long_data <- melt(merged_data, id.vars = "cases.submitter_id")
+long_data$Gene <- sub("\\..*", "", long_data$variable)
+long_data$SampleType <- sub(".*\\.", "", long_data$variable)
+long_data <- dcast(long_data, cases.submitter_id + Gene ~ SampleType, value.var = "value")
+```
+
+
+# Plot using ggplot
+```{r}
+# Reshape the data from wide to long format
+long_data_melted <- melt(long_data, id.vars = c("cases.submitter_id", "Gene"), variable.name = "SampleType", value.name = "Expression")
+
+# Define the order of genes
+gene_order <- c("XIST", "RPS4Y1", "ZFY", "USP9Y", "DDX3Y", "UTY", "TMSB4Y", "EIF1AY", "NLGN4Y", "KDM5D")
+
+# Convert gene column to factor with specified levels
+long_data_melted$Gene <- factor(long_data_melted$Gene, levels = gene_order)
+
+# Plot the data using ggplot2
+ggplot(long_data_melted, aes(x = SampleType, y = Expression, group = cases.submitter_id, color = cases.submitter_id)) +
+  geom_point(alpha = 0.6) +
+  geom_line(alpha = 0.6) +
+  facet_wrap(~ Gene, scales = "free_y") +
+  labs(title = "TCGA-LIHC: Gene Expression Comparison Between Solid Tissue Normal and Primary Tumor",
+       x = "Sample Type",
+       y = "Gene Expression") +
+  theme_minimal() +
+  theme(legend.position = "none")  # Hide legend for case.submitter_id
+```
+
+
+## Plotting the above with log transformed gene expressions 
+```{r}
+# Define the order of genes
+gene_order <- c("XIST", "RPS4Y1", "ZFY", "USP9Y", "DDX3Y", "UTY", "TMSB4Y", "EIF1AY", "NLGN4Y", "KDM5D")
+
+# Convert gene column to factor with specified levels
+long_data_melted$Gene <- factor(long_data_melted$Gene, levels = gene_order)
+
+# Ensure the Expression column is numeric
+long_data_melted$Expression <- as.numeric(long_data_melted$Expression)
+
+# Log-transform the Expression values
+long_data_melted <- long_data_melted %>%
+  mutate(LogExpression = log(Expression + 1))  # Adding 1 to avoid log(0)
+
+# Plot the data using ggplot2
+ggplot(long_data_melted, aes(x = SampleType, y = LogExpression, group = cases.submitter_id, color = cases.submitter_id)) +
+  geom_point(alpha = 0.6) +
+  geom_line(alpha = 0.6) +
+  facet_wrap(~ Gene, scales = "free_y") +
+  labs(title = "TCGA-LIHC: Gene Expression Comparison Between Solid Tissue Normal and Primary Tumor",
+       x = "Sample Type",
+       y = "Log(Gene Expression)") +
+  theme_minimal() +
+  theme(legend.position = "none") 
+```
+
+
+
+# Explore Clinical from TCGA to explore contents
+```{r}
+query_clinical_LIHC <- GDCquery(project = "TCGA-LIHC", data.category = "Clinical")
+```
+
+
+# Download the Clinical data for Clinical Supplement only
+```{r}
+query_clinical_LIHC_cs <- GDCquery(project = "TCGA-LIHC",
+    data.category = "Clinical",
+    data.type = "Clinical Supplement",
+    data.format = "BCR XML")
+
+GDCdownload(query_clinical_LIHC_cs)
+
+clinical_LIHC <- GDCprepare_clinic(query_clinical_LIHC_cs, clinical.info = "patient")
+
+```
+
+
+# Add 'gender' from 'clinical_LIHC' to 'combined_common_normal_primary'
+```{r}
+# Make sure the column names and types are appropriate for merging between data sets
+combined_common_normal_primary$cases.submitter_id <- as.character(combined_common_normal_primary$cases.submitter_id)
+clinical_LIHC$bcr_patient_barcode <- as.character(clinical_LIHC$bcr_patient_barcode)
+
+# Merge the data frames
+combined_common_normal_primary_gender <- merge(combined_common_normal_primary, 
+                     clinical_LIHC[, c("bcr_patient_barcode", "gender")], 
+                     by.x = "cases.submitter_id", 
+                     by.y = "bcr_patient_barcode", 
+                     all.x = TRUE)
+```
+
+
+# Determine thresholds for each gene as low, intermediate, high expression 
+## XIST
+```{r}
+# Ensure that XIST column is numeric
+combined_common_normal_primary_gender$XIST <- as.numeric(as.character(combined_common_normal_primary_gender$XIST))
+
+# Visualize gene expressions between males and females using violin plot
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), XIST, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("XIST Expression (log counts)") + theme_light()
+
+# Determine mean of gene expression for males for XIST
+mean_males_XIST <- mean(combined_common_normal_primary_gender$XIST[combined_common_normal_primary_gender$gender == "MALE"])
+
+mean_males_XIST
+
+# Determine high and low threshold of the mean 
+high_threshold_XIST <- mean(combined_common_normal_primary_gender$XIST[combined_common_normal_primary_gender$gender == "MALE"]) + 2.5 * sd(combined_common_normal_primary_gender$XIST[combined_common_normal_primary_gender$gender == "MALE"])
+
+high_threshold_XIST
+
+low_threshold_XIST <- mean(combined_common_normal_primary_gender$XIST[combined_common_normal_primary_gender$gender == "MALE"]) + 1 * sd(combined_common_normal_primary_gender$XIST[combined_common_normal_primary_gender$gender == "MALE"])
+
+low_threshold_XIST
+
+# Plot Violin plot with low and high thresholds
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), XIST, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("XIST Expression (log counts)") + geom_hline(yintercept = high_threshold_XIST, linetype="dashed", color = "maroon") + geom_hline(yintercept = low_threshold_XIST, linetype="dashed", color = "blue") + theme_light()
+
+```
+
+
+## RPS4Y1
+```{r}
+# Ensure that RPS4Y1 column is numeric
+combined_common_normal_primary_gender$RPS4Y1 <- as.numeric(as.character(combined_common_normal_primary_gender$RPS4Y1))
+
+# Visualize gene expressions between males and females using violin plot
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), RPS4Y1, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("RPS4Y1 Expression (log counts)") + theme_light()
+
+# Determine mean of gene expression for males for RPS4Y1
+mean_females_RPS4Y1 <- mean(combined_common_normal_primary_gender$RPS4Y1[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+mean_females_RPS4Y1
+
+# Determine high and low threshold of the mean 
+high_threshold_RPS4Y1 <- mean(combined_common_normal_primary_gender$RPS4Y1[combined_common_normal_primary_gender$gender == "FEMALE"]) + 2.5 * sd(combined_common_normal_primary_gender$RPS4Y1[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+high_threshold_RPS4Y1
+
+low_threshold_RPS4Y1 <- mean(combined_common_normal_primary_gender$RPS4Y1[combined_common_normal_primary_gender$gender == "FEMALE"]) + 1 * sd(combined_common_normal_primary_gender$RPS4Y1[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+low_threshold_RPS4Y1
+
+# Plot Violin plot with low and high thresholds
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), RPS4Y1, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("RPS4Y1 Expression (log counts)") + geom_hline(yintercept = high_threshold_RPS4Y1, linetype="dashed", color = "maroon") + geom_hline(yintercept = low_threshold_RPS4Y1, linetype="dashed", color = "blue") + theme_light()
+
+```
+
+
+# ZFY
+```{r}
+# Ensure that ZFY column is numeric
+combined_common_normal_primary_gender$ZFY <- as.numeric(as.character(combined_common_normal_primary_gender$ZFY))
+
+# Visualize gene expressions between males and females using violin plot
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), ZFY, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("ZFY Expression (log counts)") + theme_light()
+
+# Determine mean of gene expression for males for ZFY
+mean_females_ZFY <- mean(combined_common_normal_primary_gender$ZFY[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+mean_females_ZFY
+
+# Determine high and low threshold of the mean 
+high_threshold_ZFY <- mean(combined_common_normal_primary_gender$ZFY[combined_common_normal_primary_gender$gender == "FEMALE"]) + 2.5 * sd(combined_common_normal_primary_gender$ZFY[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+high_threshold_ZFY
+
+low_threshold_ZFY <- mean(combined_common_normal_primary_gender$ZFY[combined_common_normal_primary_gender$gender == "FEMALE"]) + 1 * sd(combined_common_normal_primary_gender$ZFY[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+low_threshold_ZFY
+
+# Plot Violin plot with low and high thresholds
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), ZFY, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("ZFY Expression (log counts)") + geom_hline(yintercept = high_threshold_ZFY, linetype="dashed", color = "maroon") + geom_hline(yintercept = low_threshold_ZFY, linetype="dashed", color = "blue") + theme_light()
+```
+
+
+# USP9Y
+```{r}
+# Ensure that USP9Y column is numeric
+combined_common_normal_primary_gender$USP9Y <- as.numeric(as.character(combined_common_normal_primary_gender$USP9Y))
+
+# Visualize gene expressions between males and females using violin plot
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), USP9Y, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("USP9Y Expression (log counts)") + theme_light()
+
+# Determine mean of gene expression for males for USP9Y
+mean_females_USP9Y <- mean(combined_common_normal_primary_gender$USP9Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+mean_females_USP9Y
+
+# Determine high and low threshold of the mean 
+high_threshold_USP9Y <- mean(combined_common_normal_primary_gender$USP9Y[combined_common_normal_primary_gender$gender == "FEMALE"]) + 2.5 * sd(combined_common_normal_primary_gender$USP9Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+high_threshold_USP9Y
+
+low_threshold_USP9Y <- mean(combined_common_normal_primary_gender$USP9Y[combined_common_normal_primary_gender$gender == "FEMALE"]) + 1 * sd(combined_common_normal_primary_gender$USP9Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+low_threshold_USP9Y
+
+# Plot Violin plot with low and high thresholds
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), USP9Y, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("USP9Y Expression (log counts)") + geom_hline(yintercept = high_threshold_USP9Y, linetype="dashed", color = "maroon") + geom_hline(yintercept = low_threshold_USP9Y, linetype="dashed", color = "blue") + theme_light()
+```
+
+
+# DDX3Y
+```{r}
+# Ensure that DDX3Y column is numeric
+combined_common_normal_primary_gender$DDX3Y <- as.numeric(as.character(combined_common_normal_primary_gender$DDX3Y))
+
+# Visualize gene expressions between males and females using violin plot
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), DDX3Y, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("DDX3Y Expression (log counts)") + theme_light()
+
+# Determine mean of gene expression for males for DDX3Y
+mean_females_DDX3Y <- mean(combined_common_normal_primary_gender$DDX3Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+mean_females_DDX3Y
+
+# Determine high and low threshold of the mean 
+high_threshold_DDX3Y <- mean(combined_common_normal_primary_gender$DDX3Y[combined_common_normal_primary_gender$gender == "FEMALE"]) + 2.5 * sd(combined_common_normal_primary_gender$DDX3Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+high_threshold_DDX3Y
+
+low_threshold_DDX3Y <- mean(combined_common_normal_primary_gender$DDX3Y[combined_common_normal_primary_gender$gender == "FEMALE"]) + 1 * sd(combined_common_normal_primary_gender$DDX3Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+low_threshold_DDX3Y
+
+# Plot Violin plot with low and high thresholds
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), DDX3Y, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("DDX3Y Expression (log counts)") + geom_hline(yintercept = high_threshold_DDX3Y, linetype="dashed", color = "maroon") + geom_hline(yintercept = low_threshold_DDX3Y, linetype="dashed", color = "blue") + theme_light()
+```
+
+
+# UTY
+```{r}
+# Ensure that UTY column is numeric
+combined_common_normal_primary_gender$UTY <- as.numeric(as.character(combined_common_normal_primary_gender$UTY))
+
+# Visualize gene expressions between males and females using violin plot
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), UTY, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("UTY Expression (log counts)") + theme_light()
+
+# Determine mean of gene expression for males for UTY
+mean_females_UTY <- mean(combined_common_normal_primary_gender$UTY[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+mean_females_UTY
+
+# Determine high and low threshold of the mean 
+high_threshold_UTY <- mean(combined_common_normal_primary_gender$UTY[combined_common_normal_primary_gender$gender == "FEMALE"]) + 2.5 * sd(combined_common_normal_primary_gender$UTY[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+high_threshold_UTY
+
+low_threshold_UTY <- mean(combined_common_normal_primary_gender$UTY[combined_common_normal_primary_gender$gender == "FEMALE"]) + 1 * sd(combined_common_normal_primary_gender$UTY[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+low_threshold_UTY
+
+# Plot Violin plot with low and high thresholds
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), UTY, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("UTY Expression (log counts)") + geom_hline(yintercept = high_threshold_UTY, linetype="dashed", color = "maroon") + geom_hline(yintercept = low_threshold_UTY, linetype="dashed", color = "blue") + theme_light()
+```
+
+
+# TMSB4Y
+```{r}
+# Ensure that TMSB4Y column is numeric
+combined_common_normal_primary_gender$TMSB4Y <- as.numeric(as.character(combined_common_normal_primary_gender$TMSB4Y))
+
+# Visualize gene expressions between males and females using violin plot
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), TMSB4Y, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("TMSB4Y Expression (log counts)") + theme_light()
+
+# Determine mean of gene expression for males for TMSB4Y
+mean_females_TMSB4Y <- mean(combined_common_normal_primary_gender$TMSB4Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+mean_females_TMSB4Y
+
+# Determine high and low threshold of the mean 
+high_threshold_TMSB4Y <- mean(combined_common_normal_primary_gender$TMSB4Y[combined_common_normal_primary_gender$gender == "FEMALE"]) + 2.5 * sd(combined_common_normal_primary_gender$TMSB4Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+high_threshold_TMSB4Y
+
+low_threshold_TMSB4Y <- mean(combined_common_normal_primary_gender$TMSB4Y[combined_common_normal_primary_gender$gender == "FEMALE"]) + 1 * sd(combined_common_normal_primary_gender$TMSB4Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+low_threshold_TMSB4Y
+
+# Plot Violin plot with low and high thresholds
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), TMSB4Y, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("TMSB4Y Expression (log counts)") + geom_hline(yintercept = high_threshold_TMSB4Y, linetype="dashed", color = "maroon") + geom_hline(yintercept = low_threshold_TMSB4Y, linetype="dashed", color = "blue") + theme_light()
+```
+
+
+# EIF1AY
+```{r}
+# Ensure that EIF1AY column is numeric
+combined_common_normal_primary_gender$EIF1AY <- as.numeric(as.character(combined_common_normal_primary_gender$EIF1AY))
+
+# Visualize gene expressions between males and females using violin plot
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), EIF1AY, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("EIF1AY Expression (log counts)") + theme_light()
+
+# Determine mean of gene expression for males for EIF1AY
+mean_females_EIF1AY <- mean(combined_common_normal_primary_gender$EIF1AY[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+mean_females_EIF1AY
+
+# Determine high and low threshold of the mean 
+high_threshold_EIF1AY <- mean(combined_common_normal_primary_gender$EIF1AY[combined_common_normal_primary_gender$gender == "FEMALE"]) + 2.5 * sd(combined_common_normal_primary_gender$EIF1AY[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+high_threshold_EIF1AY
+
+low_threshold_EIF1AY <- mean(combined_common_normal_primary_gender$EIF1AY[combined_common_normal_primary_gender$gender == "FEMALE"]) + 1 * sd(combined_common_normal_primary_gender$EIF1AY[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+low_threshold_EIF1AY
+
+# Plot Violin plot with low and high thresholds
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), EIF1AY, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("EIF1AY Expression (log counts)") + geom_hline(yintercept = high_threshold_EIF1AY, linetype="dashed", color = "maroon") + geom_hline(yintercept = low_threshold_EIF1AY, linetype="dashed", color = "blue") + theme_light()
+```
+
+
+# NLGN4Y
+```{r}
+# Ensure that NLGN4Y column is numeric
+combined_common_normal_primary_gender$NLGN4Y <- as.numeric(as.character(combined_common_normal_primary_gender$NLGN4Y))
+
+# Visualize gene expressions between males and females using violin plot
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), NLGN4Y, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("NLGN4Y Expression (log counts)") + theme_light()
+
+# Determine mean of gene expression for males for NLGN4Y
+mean_females_NLGN4Y <- mean(combined_common_normal_primary_gender$NLGN4Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+mean_females_NLGN4Y
+
+# Determine high and low threshold of the mean 
+high_threshold_NLGN4Y <- mean(combined_common_normal_primary_gender$NLGN4Y[combined_common_normal_primary_gender$gender == "FEMALE"]) + 2.5 * sd(combined_common_normal_primary_gender$NLGN4Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+high_threshold_NLGN4Y
+
+low_threshold_NLGN4Y <- mean(combined_common_normal_primary_gender$NLGN4Y[combined_common_normal_primary_gender$gender == "FEMALE"]) + 1 * sd(combined_common_normal_primary_gender$NLGN4Y[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+low_threshold_NLGN4Y
+
+# Plot Violin plot with low and high thresholds
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), NLGN4Y, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("NLGN4Y Expression (log counts)") + geom_hline(yintercept = high_threshold_NLGN4Y, linetype="dashed", color = "maroon") + geom_hline(yintercept = low_threshold_NLGN4Y, linetype="dashed", color = "blue") + theme_light()
+```
+### Only one that seems a bit off based on the thresholds is this one (NLGN4Y) where the thresholds appear to be much within the violin plot of females, where all others appear in between. 
+
+# KDM5D
+```{r}
+# Ensure that KDM5D column is numeric
+combined_common_normal_primary_gender$KDM5D <- as.numeric(as.character(combined_common_normal_primary_gender$KDM5D))
+
+# Visualize gene expressions between males and females using violin plot
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), KDM5D, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("KDM5D Expression (log counts)") + theme_light()
+
+# Determine mean of gene expression for males for KDM5D
+mean_females_KDM5D <- mean(combined_common_normal_primary_gender$KDM5D[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+mean_females_KDM5D
+
+# Determine high and low threshold of the mean 
+high_threshold_KDM5D <- mean(combined_common_normal_primary_gender$KDM5D[combined_common_normal_primary_gender$gender == "FEMALE"]) + 2.5 * sd(combined_common_normal_primary_gender$KDM5D[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+high_threshold_KDM5D
+
+low_threshold_KDM5D <- mean(combined_common_normal_primary_gender$KDM5D[combined_common_normal_primary_gender$gender == "FEMALE"]) + 1 * sd(combined_common_normal_primary_gender$KDM5D[combined_common_normal_primary_gender$gender == "FEMALE"])
+
+low_threshold_KDM5D
+
+# Plot Violin plot with low and high thresholds
+ggplot(data = combined_common_normal_primary_gender, aes(factor(gender), KDM5D, fill = gender)) + geom_violin(trim = FALSE) + scale_y_continuous(trans = "log10") +
+  scale_fill_manual(values = c("#999999", "#E69F00")) + geom_jitter(size = 0.75) + ylab("KDM5D Expression (log counts)") + geom_hline(yintercept = high_threshold_KDM5D, linetype="dashed", color = "maroon") + geom_hline(yintercept = low_threshold_KDM5D, linetype="dashed", color = "blue") + theme_light()
+```
+
+
+# Now based on the thresholds determined for each gene of interest above, will add low, intermediate, and high expressions for each case for each gene
+```{r}
+# Note to self, Gene order: "XIST", "RPS4Y1", "ZFY", "USP9Y", "DDX3Y", "UTY", "TMSB4Y", "EIF1AY", "NLGN4Y", "KDM5D"
+
+# Add gene expression category into the data for low, intermediate and high expressions for each gene
+counts_common_normal_primary_gender <- combined_common_normal_primary_gender %>%
+  mutate(
+    XIST_expression_category = case_when(
+      XIST >= high_threshold_XIST ~ "high_expression",
+      XIST <= low_threshold_XIST ~ "low_expression",
+      TRUE ~ "intermediate_expression"
+    ),
+    RPS4Y1_expression_category = case_when(
+      RPS4Y1 >= high_threshold_RPS4Y1 ~ "high_expression",
+      RPS4Y1 <= low_threshold_RPS4Y1 ~ "low_expression",
+      TRUE ~ "intermediate_expression"
+    ),
+    ZFY_expression_category = case_when(
+      ZFY >= high_threshold_ZFY ~ "high_expression",
+      ZFY <= low_threshold_ZFY ~ "low_expression",
+      TRUE ~ "intermediate_expression"
+    ),
+    USP9Y_expression_category = case_when(
+      USP9Y >= high_threshold_USP9Y ~ "high_expression",
+      USP9Y <= low_threshold_USP9Y ~ "low_expression",
+      TRUE ~ "intermediate_expression"
+    ),
+     DDX3Y_expression_category = case_when(
+      DDX3Y >= high_threshold_USP9Y ~ "high_expression",
+      DDX3Y <= low_threshold_USP9Y ~ "low_expression",
+      TRUE ~ "intermediate_expression"
+    ),
+    UTY_expression_category = case_when(
+      UTY >= high_threshold_UTY ~ "high_expression",
+      UTY <= low_threshold_UTY ~ "low_expression",
+      TRUE ~ "intermediate_expression"
+    ),
+    TMSB4Y_expression_category = case_when(
+      TMSB4Y >= high_threshold_TMSB4Y ~ "high_expression",
+      TMSB4Y <= low_threshold_TMSB4Y ~ "low_expression",
+      TRUE ~ "intermediate_expression"
+    ),
+    EIF1AY_expression_category = case_when(
+      EIF1AY >= high_threshold_EIF1AY ~ "high_expression",
+      EIF1AY <= low_threshold_EIF1AY ~ "low_expression",
+      TRUE ~ "intermediate_expression"
+    ),
+    NLGN4Y_expression_category = case_when(
+      NLGN4Y >= high_threshold_NLGN4Y ~ "high_expression",
+      NLGN4Y <= low_threshold_NLGN4Y ~ "low_expression",
+      TRUE ~ "intermediate_expression"
+    ),
+    KDM5D_expression_category = case_when(
+      KDM5D >= high_threshold_KDM5D ~ "high_expression",
+      KDM5D <= low_threshold_KDM5D ~ "low_expression",
+      TRUE ~ "intermediate_expression"
+    )
+  )
+```
+
+
+
+# Adding inferred sex based on threshold expressions
+```{r}
+# Create a new column based on values in XIST_expression_category for X chromosome complement
+inferred_sex_chromosome_complement <- counts_common_normal_primary_gender %>%
+  mutate(X_inferred_complement = case_when(
+    XIST_expression_category == "intermediate_expression" ~ "X",
+    XIST_expression_category == "high_expression" ~ "X",
+    XIST_expression_category == "low_expression" ~ "O"))
+```
+
+
+# Since there are multiple Y-Linked genes, will take a count for all cases that show differing expressions, then if more than half are low expressed will assign 'O'
+```{r}
+# Define the columns of interest
+Y_category_columns <- c('RPS4Y1_expression_category', 'ZFY_expression_category', 
+                        'USP9Y_expression_category', 'DDX3Y_expression_category', 
+                        'UTY_expression_category', 'TMSB4Y_expression_category', 
+                        'EIF1AY_expression_category', 'NLGN4Y_expression_category', 
+                        'KDM5D_expression_category')
+
+# Convert relevant columns to a logical matrix where 'low_expression' is TRUE
+logical_matrix_Y <- inferred_sex_chromosome_complement[Y_category_columns] == "low_expression"
+
+# Count the number of TRUE values in each row and add it as a new column
+inferred_sex_chromosome_complement <- inferred_sex_chromosome_complement %>%
+  mutate(Y_low_expression_count = rowSums(logical_matrix_Y, na.rm = TRUE))
+
+# For samples that have <4 genes expressing 'low_expression' assign a 'Y' chromosome complement
+inferred_sex_chromosome_complement <- inferred_sex_chromosome_complement %>%
+  mutate(Y_inferred_complement = if_else(Y_low_expression_count < 4, "Y", NA_character_))
+```
+
+
+# Adding another column with inferred sex chromosome complement pairs
+```{r}
+inferred_sex_chromosome_complement <- inferred_sex_chromosome_complement %>%
+  mutate(sex_chromosome_pairs = if_else(
+    is.na(Y_inferred_complement), 
+    paste0("X", X_inferred_complement), 
+    paste0("X", X_inferred_complement, Y_inferred_complement)
+  )) %>%
+  mutate(sex_chromosome_pairs = if_else(
+    gender == "MALE", 
+    gsub("O", "", sex_chromosome_pairs), 
+    sex_chromosome_pairs
+  ))
+```
+
+
+# Make new data frame with case, gender, and sex chromosome pairs
+```{r}
+# Extract the desired columns into a new data frame
+sex_complements <- subset(inferred_sex_chromosome_complement, select = c(cases.submitter_id, gender, SampleType, sex_chromosome_pairs))
+```
+
+
+# From the sex_complements data created above, table out the different combinations of 
+```{r}
+# Change "Solid Tissue Normal" to "Normal/Adjacent"
+sex_complements <- sex_complements %>%
+  mutate(SampleType = if_else(SampleType == "Solid Tissue Normal", "Normal/Adjacent", SampleType))
+
+         
+# # Note to self of all the potential combinations for sex chromosome pairs
+# FEMALE "Normal/Adjacent" with XX and Primary Tumor XX
+# FEMALE "Normal/Adjacent" with XX and Primary Tumor XO
+# FEMALE "Normal/Adjacent" with XO and Primary Tumor XO
+# FEMALE "Normal/Adjacent" with XO and Primary Tumor XX
+# FEMALE "Normal/Adjacent" with XXX and Primary Tumor XXX
+# FEMALE "Normal/Adjacent" with XO and Primary Tumor XXX
+# FEMALE "Normal/Adjacent" with XXX and Primary Tumor XO
+# FEMALE "Normal/Adjacent" with XX and Primary Tumor XXX
+# FEMALE "Normal/Adjacent" with XXX and Primary Tumor XX
+# FEMALE "Normal/Adjacent" with XX and Primary Tumor XXY
+# 
+# MALE "Normal/Adjacent" with XY and Primary Tumor XY
+# MALE "Normal/Adjacent" with XY and Primary Tumor XO
+# MALE "Normal/Adjacent" with XO and Primary Tumor XO
+# MALE "Normal/Adjacent" with XO and Primary Tumor XY
+# MALE "Normal/Adjacent" with XO and Primary Tumor XXY
+# MALE "Normal/Adjacent" with XXY and Primary Tumor XY
+# MALE "Normal/Adjacent" with XXY and Primary Tumor XO
+
+
+# Create two subsets: one for 'Normal/Adjacent' and one for 'Primary Tumor'
+normal_adjacent <- sex_complements %>%
+  dplyr::filter(SampleType == "Normal/Adjacent") %>%
+  dplyr::select(cases.submitter_id, gender, sex_chromosome_pairs) %>%
+  dplyr::rename(Normal_adjacent_sex_chromosome_pairs = sex_chromosome_pairs)
+
+primary_tumor <- sex_complements %>%
+  dplyr::filter(SampleType == "Primary Tumor") %>%
+  dplyr::select(cases.submitter_id, sex_chromosome_pairs) %>%
+  dplyr::rename(Primary_tumor_sex_chromosome_pairs = sex_chromosome_pairs)
+
+
+# Merge the two subsets on 'cases.submitter_id'
+combined_data <- dplyr::inner_join(normal_adjacent, primary_tumor, by = "cases.submitter_id")
+
+
+# Define the combinations of interest
+combinations <- c(
+  "FEMALE Normal/Adjacent XX Primary Tumor XX",
+  "FEMALE Normal/Adjacent XX Primary Tumor XO",
+  "FEMALE Normal/Adjacent XO Primary Tumor XO",
+  "FEMALE Normal/Adjacent XO Primary Tumor XX",
+  "FEMALE Normal/Adjacent XXX Primary Tumor XXX",
+  "FEMALE Normal/Adjacent XO Primary Tumor XXX",
+  "FEMALE Normal/Adjacent XXX Primary Tumor XO",
+  "FEMALE Normal/Adjacent XX Primary Tumor XXX",
+  "FEMALE Normal/Adjacent XXX Primary Tumor XX",
+  "FEMALE Normal/Adjacent XX Primary Tumor XXY",
+  "MALE Normal/Adjacent XY Primary Tumor XY",
+  "MALE Normal/Adjacent XY Primary Tumor XO",
+  "MALE Normal/Adjacent XO Primary Tumor XO",
+  "MALE Normal/Adjacent XO Primary Tumor XY",
+  "MALE Normal/Adjacent XO Primary Tumor XXY",
+  "MALE Normal/Adjacent XXY Primary Tumor XY",
+  "MALE Normal/Adjacent XXY Primary Tumor XO",
+  "MALE Normal/Adjacent XXY Primary Tumor XXY",
+  "MALE Normal/Adjacent XY Primary Tumor XXY"
+)
+
+# Create a column to identify the combinations
+combined_data <- combined_data %>%
+  dplyr::mutate(combination = paste(gender, "Normal/Adjacent", Normal_adjacent_sex_chromosome_pairs, "Primary Tumor", Primary_tumor_sex_chromosome_pairs))
+
+# Filter and count the combinations of interest
+result <- combined_data %>%
+  dplyr::filter(combination %in% combinations) %>%
+  dplyr::group_by(combination) %>%
+  dplyr::summarize(count = n())
+
+result 
+```
+
+
+
+
+
